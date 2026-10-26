@@ -159,6 +159,7 @@ textarea{resize:vertical;min-height:90px}
 .tabs{display:flex;gap:4px;background:var(--gray-50);padding:4px;border-radius:10px;overflow-x:auto;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
 .tabs button{padding:6px 14px;border-radius:8px;font-size:13px;font-weight:700;color:var(--mute);white-space:nowrap}
+.tabs button{display:inline-flex;align-items:center;gap:5px}
 .tabs button.on{background:#fff;color:var(--blue);box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .tabs button .n{font-size:11px;color:var(--dim);margin-right:4px}
 .toolbar select{width:auto;height:36px;padding:0 10px}
@@ -504,8 +505,8 @@ const STATUSES = ['جديدة','جارية','منتظرة','منتهية','مل�
 const OPEN = ['جديدة','جارية','منتظرة'];
 const WD_SHORT = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
 const MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-const NAV = [['home','الرئيسية','home'],['tasks','المهام','tasks'],['matrix','المصفوفة','grid'],['categories','التصنيفات','folder'],['calendar','التقويم','cal'],['reports','التقارير','chart'],['settings','الإعدادات','gear']];
-const BNAV = [['home','الرئيسية','home'],['tasks','المهام','tasks'],['matrix','المصفوفة','grid'],['calendar','التقويم','cal'],['reports','التقارير','chart']];
+const NAV = [['home','الرئيسية','home'],['tasks','المهام','grid'],['categories','التصنيفات','folder'],['calendar','التقويم','cal'],['reports','التقارير','chart'],['settings','الإعدادات','gear']];
+const BNAV = [['home','الرئيسية','home'],['tasks','المهام','grid'],['calendar','التقويم','cal'],['reports','التقارير','chart']];
 
 /* ======================= STATE ======================= */
 const LS = {
@@ -516,7 +517,7 @@ const LS = {
 let TOKEN = LS.get('masar_token');
 let DATA = null;
 try { DATA = JSON.parse(LS.get('masar_data') || 'null'); } catch (e) {}
-const UI = {tab:'open', cat:'', q:'', page:1, cal:null, calSel:null, period:7, stab:'profile'};
+const UI = {view: LS.get('masar_view') === 'list' ? 'list' : 'matrix', tab:'open', cat:'', q:'', page:1, cal:null, calSel:null, period:7, stab:'profile'};
 let FORM = null, CATS_EDIT = null;
 
 /* ======================= UTILS ======================= */
@@ -670,7 +671,7 @@ function render() {
   if ($('#app').classList.contains('hidden')) return;
   if (FORM && $('#fTitle')) readForm();
   const [r, arg] = routeParts();
-  const navKey = {task:'tasks', new:'tasks', edit:'tasks'}[r] || r;
+  const navKey = {task:'tasks', new:'tasks', edit:'tasks', matrix:'tasks'}[r] || r;
   $('#snav').innerHTML = NAV.map(([k, n, i]) => `<a href="#${k}" class="${navKey === k ? 'on' : ''}">${ic(i)}${n}</a>`).join('');
   $('#bnav').innerHTML = BNAV.map(([k, n, i]) => `<a href="#${k}" class="${navKey === k ? 'on' : ''}">${ic(i, 22)}${n}</a>`).join('');
   $('#fab').classList.toggle('hide', ['new', 'edit', 'settings'].includes(r));
@@ -738,7 +739,11 @@ function filterTasks(tab) {
   else if (tab === 'done') l = l.filter(t => t.status === 'منتهية');
   return l;
 }
+const tasksHead = v => `<div class="ph"><h1>المهام</h1>
+  <div class="tabs"><button class="${v === 'matrix' ? 'on' : ''}" data-view="matrix">${ic('grid', 16)}المصفوفة</button><button class="${v === 'list' ? 'on' : ''}" data-view="list">${ic('tasks', 16)}القائمة</button></div>
+  <a class="btn pri" href="#new">${ic('plus', 18)}إضافة مهمة</a></div>`;
 function pTasks(arg) {
+  if (!arg && UI.view === 'matrix') return pMatrix();
   if (arg && TABS.some(t => t[0] === arg) && arg !== UI.tab) { UI.tab = arg; UI.page = 1; }
   let list = filterTasks(UI.tab);
   if (UI.cat) list = list.filter(t => t.cat === UI.cat);
@@ -748,7 +753,7 @@ function pTasks(arg) {
   UI.page = Math.min(UI.page, pages);
   const slice = list.slice((UI.page - 1) * per, UI.page * per);
   const counts = Object.fromEntries(TABS.map(([k]) => [k, filterTasks(k).length]));
-  return `<div class="ph"><h1>المهام</h1><a class="btn pri" href="#new">${ic('plus', 18)}إضافة مهمة</a></div>
+  return `${tasksHead('list')}
   <div class="card">
     <div class="toolbar">
       <div class="tabs">${TABS.map(([k, n]) => `<button class="${UI.tab === k ? 'on' : ''}" data-tab="${k}">${n}<span class="n num">${counts[k]}</span></button>`).join('')}</div>
@@ -771,6 +776,7 @@ function pTasks(arg) {
 }
 function bindTasks() {
   const q = $('#tq');
+  if (!q) return;
   q.oninput = () => { UI.q = q.value.trim(); UI.page = 1; const pos = q.selectionStart; render(); const n = $('#tq'); n.focus(); n.setSelectionRange(pos, pos); };
   $('#catSel').onchange = e => { UI.cat = e.target.value; UI.page = 1; render(); };
 }
@@ -977,7 +983,7 @@ function pMatrix() {
         <button class="circ" data-done="${esc(t.id)}" aria-label="تم">${ic('check', 14)}</button></div>`).join('') : '<div class="empty" style="padding:22px 10px">فاضية</div>'}
     </div>`;
   };
-  return `<div class="ph"><h1>مصفوفة أيزنهاور</h1><a class="btn pri" href="#new">${ic('plus', 18)}إضافة مهمة</a></div>
+  return `${tasksHead('matrix')}
     <div class="qgrid">${cell('Do')}${cell('Plan')}${cell('Quick')}${cell('Later')}</div>`;
 }
 
@@ -1095,7 +1101,7 @@ function pReports() {
         <div class="cap" style="bottom:${d.cap / wMax * 100}%"></div><div class="col ${d.load > d.cap + .1 ? 'over' : ''}" style="height:${d.load / wMax * 100}%"></div></div>
         <span class="l">${d.n === tn ? 'النهارده' : WD_SHORT[wday(d.n)]}</span></div>`).join('')}</div></div>
     <div class="card"><div class="card-h"><h3>مصفوفة الأولويات</h3></div>
-      <div class="mx">${['Do', 'Plan', 'Quick', 'Later'].map(k => `<div style="--mb:${QUAD[k].b};--mc:${QUAD[k].c}" data-go="#matrix"><b class="num">${qc[k]}</b><small>${QUAD[k].n}</small></div>`).join('')}</div></div>
+      <div class="mx">${['Do', 'Plan', 'Quick', 'Later'].map(k => `<div style="--mb:${QUAD[k].b};--mc:${QUAD[k].c}" data-view="matrix"><b class="num">${qc[k]}</b><small>${QUAD[k].n}</small></div>`).join('')}</div></div>
   </div>
   <div class="card" style="margin-top:16px"><div class="card-h"><h3>Insights</h3></div>
     <ul class="ins">${ins.length ? ins.map(([i, c, t]) => `<li><span class="ii" style="color:${c}">${ic(i, 16)}</span><span>${t}</span></li>`).join('') : '<li><span class="ii">' + ic('check', 16) + '</span><span>ضيف مهام عشان تظهر التحليلات.</span></li>'}</ul></div>`;
@@ -1172,7 +1178,7 @@ function toggleMenu(show) {
 }
 
 document.addEventListener('click', async e => {
-  const el = e.target.closest('[data-done],[data-del],[data-go],[data-act],[data-tab],[data-pg],[data-st],[data-progress],[data-day],[data-cal],[data-period],[data-stab],[data-catedit],[data-catdel]');
+  const el = e.target.closest('[data-done],[data-del],[data-go],[data-act],[data-tab],[data-pg],[data-st],[data-progress],[data-day],[data-cal],[data-period],[data-stab],[data-catedit],[data-catdel],[data-view]');
   if (!e.target.closest('#menu') && !e.target.closest('[data-act="menu"]')) toggleMenu(false);
   if (!el) { if (e.target.id === 'modal') closeModal(); return; }
   const d = el.dataset;
@@ -1191,6 +1197,7 @@ document.addEventListener('click', async e => {
   }
   if (d.period) { UI.period = +d.period; render(); return; }
   if (d.stab) { UI.stab = d.stab; render(); return; }
+  if (d.view) { UI.view = d.view; LS.set('masar_view', d.view); if (location.hash !== '#tasks') location.hash = '#tasks'; else render(); return; }
   if (d.catedit) { catModal(+d.catedit); return; }
   if (d.catdel) { catDel(+d.catdel); return; }
   switch (d.act) {
