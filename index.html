@@ -235,6 +235,20 @@ textarea{resize:vertical;min-height:90px}
 .icg button{height:40px;border-radius:10px;border:1px solid var(--line);display:grid;place-items:center;color:var(--ink2)}
 .icg button.on{border-color:var(--blue);background:var(--blue-50);color:var(--blue)}
 
+/* matrix */
+.qgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.qcell{border-top:4px solid var(--qc);overflow:hidden}
+.qh{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:linear-gradient(180deg,var(--qb),#fff)}
+.qh b{display:block;font-size:16px;font-weight:800;color:var(--qc)}
+.qh small{color:var(--mute);font-size:12px;font-weight:600}
+.qh .num{font-size:28px;font-weight:800;color:var(--qc)}
+.qrow{display:flex;align-items:center;gap:10px;padding:11px 18px;border-top:1px solid var(--line2);cursor:pointer}
+.qrow:hover{background:#fafbfe}
+.qrow .tt{flex:1;min-width:0}
+.qrow .tt b{display:block;font-weight:700;font-size:13.5px;line-height:1.5}
+.qrow .tt small{color:var(--mute);font-size:12px}
+@media (max-width:640px){.qgrid{grid-template-columns:1fr}.bnav a{width:58px;font-size:10.5px}}
+
 /* calendar */
 .calgrid{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start}
 .cal-h{display:flex;align-items:center;gap:8px;padding:14px 18px}
@@ -431,6 +445,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyiYiu2pkld47JRNmX-cDWp
 const P = {
   home:'<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
   tasks:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8.5 12 2.5 2.5L15.5 10"/>',
+  grid:'<rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/>',
   folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   cal:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   chart:'<path d="M3 21h18M7 17v-6M12 17V6M17 17v-9"/>',
@@ -489,8 +504,8 @@ const STATUSES = ['جديدة','جارية','منتظرة','منتهية','مل�
 const OPEN = ['جديدة','جارية','منتظرة'];
 const WD_SHORT = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
 const MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-const NAV = [['home','الرئيسية','home'],['tasks','المهام','tasks'],['categories','التصنيفات','folder'],['calendar','التقويم','cal'],['reports','التقارير','chart'],['settings','الإعدادات','gear']];
-const BNAV = [['home','الرئيسية','home'],['tasks','المهام','tasks'],['calendar','التقويم','cal'],['reports','التقارير','chart']];
+const NAV = [['home','الرئيسية','home'],['tasks','المهام','tasks'],['matrix','المصفوفة','grid'],['categories','التصنيفات','folder'],['calendar','التقويم','cal'],['reports','التقارير','chart'],['settings','الإعدادات','gear']];
+const BNAV = [['home','الرئيسية','home'],['tasks','المهام','tasks'],['matrix','المصفوفة','grid'],['calendar','التقويم','cal'],['reports','التقارير','chart']];
 
 /* ======================= STATE ======================= */
 const LS = {
@@ -668,7 +683,7 @@ function render() {
   }
   const page = $('#page');
   if (!DATA) { page.innerHTML = `<div class="empty" style="padding-top:80px">${ic('loader', 28)}<br>جاري التحميل…</div>`; return; }
-  const fn = {home: pHome, tasks: pTasks, task: pTask, new: pForm, edit: pForm, categories: pCats, calendar: pCal, reports: pReports, settings: pSettings}[r] || pHome;
+  const fn = {home: pHome, tasks: pTasks, matrix: pMatrix, task: pTask, new: pForm, edit: pForm, categories: pCats, calendar: pCal, reports: pReports, settings: pSettings}[r] || pHome;
   page.innerHTML = fn(arg);
   page.querySelectorAll('[data-ic]').forEach(fillIcon);
   const binder = {tasks: bindTasks, new: bindForm, edit: bindForm, settings: bindSettings}[r];
@@ -948,6 +963,24 @@ async function catDel(idx) {
   });
 }
 
+/* ---------- eisenhower matrix ---------- */
+const QTAG = {Do:'مهم · عاجل', Plan:'مهم · مش عاجل', Quick:'عاجل · أقل أهمية', Later:'مش عاجل · أقل أهمية'};
+function pMatrix() {
+  const open = DATA.tasks.filter(isOpen).sort(byScore);
+  const cell = k => {
+    const l = open.filter(t => t.quad === k), q = QUAD[k];
+    return `<div class="card qcell" style="--qc:${q.c};--qb:${q.b}">
+      <div class="qh"><div><b>${q.n}</b><small>${QTAG[k]}</small></div><span class="num">${l.length}</span></div>
+      ${l.length ? l.map(t => `<div class="qrow" data-go="#task/${esc(t.id)}">
+        <span class="score num">${t.score}</span>
+        <div class="tt"><b>${esc(t.title)}</b><small>${dueTxt(t)}</small></div>
+        <button class="circ" data-done="${esc(t.id)}" aria-label="تم">${ic('check', 14)}</button></div>`).join('') : '<div class="empty" style="padding:22px 10px">فاضية</div>'}
+    </div>`;
+  };
+  return `<div class="ph"><h1>مصفوفة أيزنهاور</h1><a class="btn pri" href="#new">${ic('plus', 18)}إضافة مهمة</a></div>
+    <div class="qgrid">${cell('Do')}${cell('Plan')}${cell('Quick')}${cell('Later')}</div>`;
+}
+
 /* ---------- calendar ---------- */
 function pCal() {
   const tn = TN(), td = new Date(tn * 864e5);
@@ -1062,7 +1095,7 @@ function pReports() {
         <div class="cap" style="bottom:${d.cap / wMax * 100}%"></div><div class="col ${d.load > d.cap + .1 ? 'over' : ''}" style="height:${d.load / wMax * 100}%"></div></div>
         <span class="l">${d.n === tn ? 'النهارده' : WD_SHORT[wday(d.n)]}</span></div>`).join('')}</div></div>
     <div class="card"><div class="card-h"><h3>مصفوفة الأولويات</h3></div>
-      <div class="mx">${['Do', 'Plan', 'Quick', 'Later'].map(k => `<div style="--mb:${QUAD[k].b};--mc:${QUAD[k].c}" data-go="#tasks/open"><b class="num">${qc[k]}</b><small>${QUAD[k].n}</small></div>`).join('')}</div></div>
+      <div class="mx">${['Do', 'Plan', 'Quick', 'Later'].map(k => `<div style="--mb:${QUAD[k].b};--mc:${QUAD[k].c}" data-go="#matrix"><b class="num">${qc[k]}</b><small>${QUAD[k].n}</small></div>`).join('')}</div></div>
   </div>
   <div class="card" style="margin-top:16px"><div class="card-h"><h3>Insights</h3></div>
     <ul class="ins">${ins.length ? ins.map(([i, c, t]) => `<li><span class="ii" style="color:${c}">${ic(i, 16)}</span><span>${t}</span></li>`).join('') : '<li><span class="ii">' + ic('check', 16) + '</span><span>ضيف مهام عشان تظهر التحليلات.</span></li>'}</ul></div>`;
